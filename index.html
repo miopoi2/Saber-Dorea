@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Saber Dórea</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>html,body{background:#0a0a0c;overscroll-behavior:none;font-family:Inter,system-ui,sans-serif;-webkit-tap-highlight-color:transparent}input{color-scheme:dark}</style>
+</head>
+<body class="text-zinc-100">
+<div class="mx-auto flex h-[100dvh] max-w-md flex-col" style="padding-top:env(safe-area-inset-top)">
+<main id="v" class="min-h-0 flex-1 overflow-y-auto"></main>
+<nav class="grid grid-cols-4 border-t border-white/[0.06] bg-[#0a0a0c]/80 backdrop-blur" style="padding-bottom:env(safe-area-inset-bottom)">
+<button data-t="hoje" onclick="go('hoje')" class="py-2.5 text-[11px]"><div class="text-lg leading-none">◉</div>Hoje</button>
+<button data-t="prog" onclick="go('prog')" class="py-2.5 text-[11px]"><div class="text-lg leading-none">▤</div>Progresso</button>
+<button data-t="mentor" onclick="go('mentor')" class="py-2.5 text-[11px]"><div class="text-lg leading-none">✦</div>Mentor</button>
+<button data-t="cfg" onclick="go('cfg')" class="py-2.5 text-[11px]"><div class="text-lg leading-none">⚙</div>Config</button>
+</nav>
+</div>
+<script>
+const $=s=>document.querySelector(s),
+DN=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'],
+SH=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+const L=(k,d)=>{try{return JSON.parse(localStorage.getItem(k))??d}catch{return d}};
+const S=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>');
+const dk=(d=new Date())=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+
+function defRoutine(){
+ const r={};
+ for(let d=0;d<7;d++){
+  const tr={1:'Treino Upper',2:'Treino Lower',4:'Treino Upper',5:'Treino Lower'}[d];
+  r[d]=[['07:00','Acordar e beber água'],['07:30','Refeição 1: café da manhã denso'],['08:00','Deep Work Acadêmico/Técnico (1h15)'],['09:15','Repertório Geral / Leitura (45 min)'],['10:00','Técnica Feynman & Síntese (45 min)'],['12:30','Refeição 2: almoço'],['14:00',tr?tr+' (2h)':'Descanso ativo, sem treino'],['16:30','Prática Deliberada / Active Recall (45 min)'],['17:15','Contemplação Livre, sem estímulos (30 min)'],['17:45','Meditação & Foco (30 min)'],['19:30','Refeição 3: jantar'],['20:30','Journaling & Discernimento (30 min)'],['21:00','Hidratação: 4 L concluídos'],['22:00','Dormir (22:00 às 07:00, 9h de sono)']].map(([t,x],i)=>({id:d+'-'+i,t,x}));
+ }
+ return r;
+}
+
+let cfg={r:defRoutine(),key:'',model:'',...L('sd_cfg',{})},log=L('sd_log',{}),chat=L('sd_chat',[]),tab='hoje',ed=new Date().getDay(),busy=false,cur=dk();
+const items=d=>[...(cfg.r[d]||[])].sort((a,b)=>a.t.localeCompare(b.t));
+const today=()=>log[dk()]?.d||{};
+const pct=(it,dn)=>it.length?Math.round(it.filter(i=>dn[i.id]).length/it.length*100):0;
+const last=n=>[...Array(n)].map((_,i)=>{const d=new Date();d.setDate(d.getDate()-(n-1-i));const k=dk(d);return{d,k,p:i===n-1?pct(items(d.getDay()),today()):log[k]?.p||0}});
+const avg7=()=>Math.round(last(7).reduce((s,x)=>s+x.p,0)/7);
+const card='rounded-2xl border border-white/[0.06] bg-[#121216]';
+const ring=p=>`<svg viewBox="0 0 80 80" class="h-28 w-28 -rotate-90"><circle cx="40" cy="40" r="34" fill="none" stroke="#312e81" stroke-opacity=".55" stroke-width="7"/><circle cx="40" cy="40" r="34" fill="none" stroke="#7c3aed" stroke-width="7" stroke-linecap="round" stroke-dasharray="${p*2.136} 213.6" style="transition:stroke-dasharray .4s"/></svg>`;
+const bar=x=>`<div class="flex items-center gap-3"><span class="w-8 text-xs text-zinc-400">${SH[x.d.getDay()]}</span><div class="h-2.5 flex-1 overflow-hidden rounded-full bg-white/5"><div class="h-full rounded-full bg-gradient-to-r from-indigo-700 to-violet-500" style="width:${x.p}%"></div></div><span class="w-10 text-right text-xs tabular-nums">${x.p}%</span></div>`;
+
+function tg(id){
+ const it=items(new Date().getDay()),k=dk(),e=log[k]||(log[k]={d:{},p:0});
+ e.d[id]?delete e.d[id]:e.d[id]=1;
+ e.p=pct(it,e.d);S('sd_log',log);render();
+}
+const go=t=>{tab=t;$('#v').scrollTop=0;render()};
+
+function vHoje(){
+ const n=new Date(),it=items(n.getDay()),dn=today(),p=pct(it,dn),c=it.filter(i=>dn[i.id]).length;
+ return `<div class="space-y-4 p-4">
+ <div class="${card} flex items-center justify-between bg-gradient-to-br from-indigo-950 to-[#121216] p-5">
+  <div><p class="text-sm text-violet-300">${n.toLocaleDateString('pt-BR',{day:'numeric',month:'long'})}</p><h1 class="text-3xl font-bold">${DN[n.getDay()]}</h1><p class="mt-1 text-sm text-zinc-400">${c} de ${it.length} blocos feitos</p></div>
+  <div class="relative">${ring(p)}<span class="absolute inset-0 grid place-items-center text-2xl font-bold">${p}%</span></div>
+ </div>
+ <ul class="space-y-2">${it.map(i=>{const d=dn[i.id];return `<li><button onclick="tg('${i.id}')" class="${card} flex w-full items-center gap-3 p-3.5 text-left backdrop-blur active:bg-white/5 ${d?'opacity-50':''}"><span class="grid h-6 w-6 shrink-0 place-items-center rounded-md border text-sm ${d?'border-violet-600 bg-violet-600':'border-white/20'}">${d?'✓':''}</span><span class="min-w-0 flex-1"><span class="block text-xs tabular-nums text-violet-400">${esc(i.t)}</span><span class="block text-sm ${d?'line-through':''}">${esc(i.x)}</span></span></button></li>`}).join('')||'<li class="p-6 text-center text-sm text-zinc-500">Nenhum bloco neste dia. Adicione em Config.</li>'}</ul></div>`;
+}
+
+function vProg(){
+ const w=last(7),ks=Object.keys(log).sort(),ok=ks.filter(k=>log[k].p>=80).length,
+ span=ks.length?Math.round((new Date(dk()+'T00:00:00')-new Date(ks[0]+'T00:00:00'))/864e5)+1:0;
+ let s=0;const d=new Date();
+ if(pct(items(d.getDay()),today())<80)d.setDate(d.getDate()-1);
+ while((log[dk(d)]?.p||0)>=80){s++;d.setDate(d.getDate()-1)}
+ const st=(a,b)=>`<div class="${card} p-3 text-center"><p class="text-xl font-bold text-violet-400">${a}</p><p class="mt-0.5 text-xs text-zinc-500">${b}</p></div>`;
+ const hc=p=>p>=80?'bg-violet-500':p>=50?'bg-violet-700':p>0?'bg-indigo-900':'bg-white/5';
+ return `<div class="space-y-4 p-4"><h1 class="text-2xl font-bold">Progresso</h1>
+ <div class="grid grid-cols-3 gap-2">${st(avg7()+'%','Média de 7 dias')}${st(s+(s===1?' dia':' dias'),'Sequência ≥ 80%')}${st(span?Math.round(ok/span*100)+'%':'–','Dias estritos')}</div>
+ <section class="${card} space-y-3 p-4"><h2 class="text-sm font-semibold">Últimos 7 dias</h2>${w.map(bar).join('')}</section>
+ <section class="${card} p-4"><h2 class="mb-3 text-sm font-semibold">Consistência nas últimas 12 semanas</h2><div class="grid grid-flow-col auto-cols-fr grid-rows-[repeat(7,minmax(0,1fr))] gap-1">${last(84).map(x=>`<div title="${x.k}: ${x.p}%" class="aspect-square rounded-[3px] ${hc(x.p)}"></div>`).join('')}</div><p class="mt-3 text-xs text-zinc-500">${ok} de ${span} dias com 80% ou mais desde o primeiro registro. Dias sem registro contam como 0%.</p></section></div>`;
+}
+
+const msgs=()=>(chat.length?chat:[{r:'assistant',c:'Sou o **Mentor Saber Dórea**. Diga o que está travando você hoje: com fatos, sem desculpas.'}]).map(m=>`<div class="flex ${m.r==='user'?'justify-end':''}"><div class="max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${m.r==='user'?'bg-violet-700':'border border-white/[0.06] bg-[#121216]'}">${fmt(m.c)}</div></div>`).join('')+(busy?'<p class="text-xs text-zinc-500">O Mentor está respondendo…</p>':'');
+const vMentor=()=>`<div class="flex h-full flex-col"><div id="ms" class="flex-1 space-y-3 overflow-y-auto px-4 pt-5"></div><div class="flex gap-2 p-3"><input id="q" placeholder="Fale com o Mentor" class="min-w-0 flex-1 rounded-2xl border border-white/10 bg-[#121216] px-4 py-3 text-sm outline-none focus:border-violet-600" onkeydown="event.key==='Enter'&&send()"><button onclick="send()" class="rounded-2xl bg-violet-600 px-5 text-sm font-semibold active:bg-violet-700">Enviar</button></div></div>`;
+const upd=()=>{const m=$('#ms');if(m){m.innerHTML=msgs();m.scrollTop=m.scrollHeight}};
+
+function loc(){
+ const dn=today(),f=items(new Date().getDay()).filter(i=>!dn[i.id]),q=(chat.filter(m=>m.r==='user').pop()?.c||'').toLowerCase();
+ const a=/sono|dorm|cans/.test(q)?'Sono não se negocia: 9 a 10 horas. Cansaço se resolve com horário, não com café. Dormir às 22:00 é uma decisão de hoje.'
+ :/água|agua|hidrat/.test(q)?'Água: 4 litros, distribuídos ao longo do dia. Deixar tudo para a noite é autoengano.'
+ :/treino|academia|preguiç/.test(q)?'Treino é base biológica, não prêmio. Faça o bloco de 2h do dia (Upper/Lower) e descanse só nos dias de Rest.'
+ :/foco|procrastin|distra|motiva/.test(q)?'Escolha o próximo bloco pendente, defina uma entrega concreta e comece em 2 minutos, sem celular. Depois explique o que aprendeu sem consultar nada (Feynman).'
+ :'Separe o fato da história que você conta sobre ele. Qual é a decisão mais honesta agora, e qual é o primeiro passo?';
+ return a+(f.length?'\n\nPendentes hoje ('+f.length+'): '+f.slice(0,3).map(i=>i.x).join('; ')+'.':'\n\nRotina de hoje cumprida. Registre no Journaling o que funcionou.')+'\n\n(Modo offline simples. Para o Mentor com IA, adicione sua chave em Config.)';
+}
+const sysP=()=>{
+ const n=new Date(),it=items(n.getDay()),dn=today();
+ return `Você é o Mentor Saber Dórea, guardião implacável da evolução de longo prazo do aluno. Fale em português do Brasil, de forma direta, firme e respeitosa, sem bajular.
+Princípios inegociáveis:
+- Cobre disciplina rígida com o bloco diário de 5 horas de foco mental (Deep Work, Técnica Feynman, Active Recall, Prática Deliberada), teto de 5h.
+- Monitore e reforce a base biológica: 9 a 10 horas de sono (22:00 às 07:00), 4 litros de água, refeições densas e saudáveis e rigor nos treinos (Upper/Lower/Rest).
+- Diante de dúvidas, impedimentos ou autoenganos, aplique sabedoria, discernimento e tomada de decisão autêntica: nomeie o autoengano, separe fato de narrativa e termine com uma ação concreta.
+- Seja conciso (até ~150 palavras). Não dê conselho médico; diante de sinais de sofrimento sério, recomende apoio profissional.
+Contexto de hoje (${DN[n.getDay()]}, ${dk()}): ${pct(it,dn)}% concluído. Pendentes: ${it.filter(i=>!dn[i.id]).map(i=>i.t+' '+i.x).join('; ')||'nenhum'}. Média dos últimos 7 dias: ${avg7()}%.`;
+};
+async function ask(){
+ const k=cfg.key.trim(),m=chat.filter(x=>!x.err).slice(-20).map(x=>({role:x.r,content:x.c}));
+ while(m.length&&m[0].role!=='user')m.shift();
+ if(!k)return loc();
+ const a=k.startsWith('sk-ant'),
+ r=await fetch(a?'https://api.anthropic.com/v1/messages':'https://api.openai.com/v1/chat/completions',{method:'POST',
+  headers:a?{'content-type':'application/json','x-api-key':k,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'}:{'content-type':'application/json',authorization:'Bearer '+k},
+  body:JSON.stringify(a?{model:cfg.model||'claude-sonnet-5-5',max_tokens:1000,system:sysP(),messages:m}:{model:cfg.model||'gpt-4o-mini',messages:[{role:'system',content:sysP()},...m]})}),
+ j=await r.json();
+ if(!r.ok)throw new Error(j.error?.message||r.status);
+ return a?j.content.map(b=>b.text||'').join(''):j.choices[0].message.content;
+}
+async function send(){
+ const q=$('#q'),t=q.value.trim();if(!t||busy)return;
+ q.value='';chat.push({r:'user',c:t});busy=true;upd();
+ try{chat.push({r:'assistant',c:await ask()})}
+ catch(e){chat.push({r:'assistant',c:'Não consegui falar com a IA: '+e.message+'. Confira a chave e o modelo em Config.',err:1})}
+ busy=false;chat=chat.slice(-60);S('sd_chat',chat);upd();
+}
+
+const up=(id,f,v)=>{const x=(cfg.r[ed]||[]).find(i=>i.id===id);if(x&&(v||f==='x')){x[f]=v;S('sd_cfg',cfg)}};
+const del=id=>{cfg.r[ed]=cfg.r[ed].filter(i=>i.id!==id);S('sd_cfg',cfg);render()};
+const add=()=>{cfg.r[ed].push({id:'c'+Date.now(),t:'12:00',x:'Novo bloco'});S('sd_cfg',cfg);render()};
+const cpy=()=>{if(confirm('Copiar a rotina de '+DN[ed]+' para todos os dias?')){for(let d=0;d<7;d++)cfg.r[d]=cfg.r[ed].map(i=>({...i}));S('sd_cfg',cfg);render()}};
+const rst=()=>{if(confirm('Restaurar a rotina padrão? Suas edições de blocos serão perdidas (o histórico é mantido).')){cfg.r=defRoutine();S('sd_cfg',cfg);render()}};
+
+function vCfg(){
+ const inp='min-w-0 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2.5 text-sm outline-none focus:border-violet-600';
+ return `<div class="space-y-4 p-4"><h1 class="text-2xl font-bold">Configurações</h1>
+ <section class="${card} space-y-3 p-4"><h2 class="text-sm font-semibold">Editor da rotina</h2>
+ <div class="grid grid-cols-7 gap-1">${[1,2,3,4,5,6,0].map(d=>`<button onclick="ed=${d};render()" class="rounded-lg py-2 text-xs ${d===ed?'bg-violet-600 font-semibold':'bg-white/5 text-zinc-400'}">${SH[d]}</button>`).join('')}</div>
+ <div class="space-y-2">${items(ed).map(i=>`<div class="flex items-center gap-2"><input type="time" value="${esc(i.t)}" onchange="up('${i.id}','t',this.value)" class="${inp} !w-[6.5rem] shrink-0"><input value="${esc(i.x)}" onchange="up('${i.id}','x',this.value)" class="${inp}"><button onclick="del('${i.id}')" class="px-2 text-zinc-500" aria-label="Remover bloco">✕</button></div>`).join('')}</div>
+ <div class="flex flex-wrap gap-2 text-xs"><button onclick="add()" class="rounded-lg bg-violet-600 px-3 py-2 font-semibold">Adicionar bloco</button><button onclick="cpy()" class="rounded-lg bg-white/5 px-3 py-2">Copiar para todos os dias</button><button onclick="rst()" class="rounded-lg bg-white/5 px-3 py-2 text-zinc-400">Restaurar padrão</button></div>
+ <p class="text-xs text-zinc-500">Os blocos reaparecem na ordem do horário. As alterações valem para toda ${DN[ed].toLowerCase()} a partir de agora.</p></section>
+ <section class="${card} space-y-3 p-4"><h2 class="text-sm font-semibold">Mentor com IA</h2>
+ <input type="password" autocomplete="off" placeholder="Chave de API (sk-ant-… ou OpenAI)" value="${esc(cfg.key)}" onchange="cfg.key=this.value.trim();S('sd_cfg',cfg)" class="${inp}">
+ <input placeholder="Modelo (opcional)" value="${esc(cfg.model)}" onchange="cfg.model=this.value.trim();S('sd_cfg',cfg)" class="${inp}">
+ <p class="text-xs leading-relaxed text-zinc-500">A chave fica só neste aparelho (localStorage) e é enviada apenas ao provedor. Chaves sk-ant-… usam a Anthropic; qualquer outra usa a OpenAI. Sem chave, o Mentor responde em modo offline simples.</p></section></div>`;
+}
+
+function render(){
+ $('#v').innerHTML={hoje:vHoje,prog:vProg,mentor:vMentor,cfg:vCfg}[tab]();
+ document.querySelectorAll('nav button').forEach(b=>{const on=b.dataset.t===tab;b.classList.toggle('text-violet-400',on);b.classList.toggle('text-zinc-500',!on)});
+ if(tab==='mentor')upd();
+}
+const tick=()=>{if(dk()!==cur){cur=dk();render()}};
+render();setInterval(tick,30000);document.addEventListener('visibilitychange',tick);
+
+(()=>{
+ const c=document.createElement('canvas');c.width=c.height=512;
+ const x=c.getContext('2d'),g=x.createLinearGradient(0,0,512,512);
+ g.addColorStop(0,'#6d28d9');g.addColorStop(1,'#1e1b4b');x.fillStyle=g;x.fillRect(0,0,512,512);
+ x.fillStyle='#fff';x.font='700 210px Inter,sans-serif';x.textAlign='center';x.textBaseline='middle';x.fillText('SD',256,272);
+ const s=document.createElement('canvas');s.width=s.height=192;s.getContext('2d').drawImage(c,0,0,192,192);
+ const i5=c.toDataURL(),i1=s.toDataURL();
+ document.head.insertAdjacentHTML('beforeend','<link rel="icon" href="'+i1+'"><link rel="apple-touch-icon" href="'+i5+'">');
+ const m={name:'Saber Dórea',short_name:'Saber Dórea',start_url:location.href.split('#')[0],display:'standalone',background_color:'#0a0a0c',theme_color:'#0a0a0c',icons:[{src:i1,sizes:'192x192',type:'image/png',purpose:'any'},{src:i5,sizes:'512x512',type:'image/png',purpose:'any'}]};
+ const l=document.createElement('link');l.rel='manifest';
+ l.href=URL.createObjectURL(new Blob([JSON.stringify(m)],{type:'application/manifest+json'}));
+ document.head.appendChild(l);
+})();
+</script>
+</body>
+</html>
